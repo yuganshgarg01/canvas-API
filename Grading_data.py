@@ -7,8 +7,8 @@ import os
 #  CONFIGURATION — Fill these in
 # ============================================================
 CANVAS_URL = "https://canvas.instructure.com"
-API_TOKEN  = "7~MBH3uK97YzJE3VGrDkBYCe9PJ6KNt3Yu24vYaxTGNBHcWF2neL7cr7QYKZtn9vQL"
-COURSE_ID  = "14438223"
+API_TOKEN  = "Insert Your Token here"
+COURSE_ID  = "Insert COurse ID"
 # ============================================================
 
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
