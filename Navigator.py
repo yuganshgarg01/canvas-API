@@ -6,7 +6,7 @@ import time
 # ============================================================
 CANVAS_URL = "https://canvas.instructure.com"
 API_TOKEN  = "paste_your_token_here"
-COURSE_ID  = "14437115"
+COURSE_ID  = "Course ID here"
 # ============================================================
 
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
