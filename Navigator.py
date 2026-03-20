@@ -6,15 +6,15 @@ import time
 # ============================================================
 CANVAS_URL = "https://canvas.instructure.com"
 API_TOKEN  = "paste_your_token_here"
-COURSE_ID  = "Course ID here"
+COURSE_ID  = " Paste course ID"
 # ============================================================
 
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
 # ============================================================
-# DESIRED NAVIGATION ORDER (visible to students)
+# VISIBLE TABS — in exact order you want
 # ============================================================
-VISIBLE_TABS = [
+VISIBLE_ORDER = [
     "home",
     "syllabus",
     "modules",
@@ -25,25 +25,25 @@ VISIBLE_TABS = [
     "grades",
     "announcements",
     "people",
-    "context_external_tool",   # Course Analytics
-    "question_banks",          # Item Banks
+    "context_external_tool",  # Course Analytics
+    "question_banks",         # Item Banks
 ]
 
 # ============================================================
-# TABS TO HIDE FROM STUDENTS
+# HIDDEN TABS — will be pushed to bottom & hidden
 # ============================================================
-HIDDEN_TABS = [
+HIDDEN_NAMES = [
     "outcomes",
     "rubrics",
     "pages",
     "files",
     "attendance",
-    "conferences",             # Big Blue Button
-    "external_tools",          # Lucid (Whiteboard)
+    "conferences",    # Big Blue Button
+    "lucid",          # Lucid Whiteboard (partial match on label)
 ]
 
 # ============================================================
-# STEP 1: FETCH ALL CURRENT TABS
+# STEP 1: FETCH ALL TABS
 # ============================================================
 print("\n" + "="*55)
 print("📋 Fetching current navigation tabs...")
@@ -55,20 +55,56 @@ response = requests.get(
 )
 
 if response.status_code != 200:
-    print(f"❌ Error fetching tabs: {response.status_code} → {response.text}")
+    print(f"❌ Error: {response.status_code} → {response.text}")
     exit()
 
-tabs = response.json()
-print(f"✅ Found {len(tabs)} tabs\n")
+all_tabs = response.json()
+print(f"✅ Found {len(all_tabs)} tabs\n")
 
-# Show current tabs
-print(f"{'ID':<30} {'Label':<30} {'Position':<10} {'Hidden'}")
-print("-" * 80)
-for t in tabs:
-    print(f"{t.get('id',''):<30} {t.get('label',''):<30} {str(t.get('position','')):<10} {t.get('hidden', False)}")
+# Show all tabs found
+print(f"{'ID':<35} {'Label':<30}")
+print("-" * 65)
+for t in all_tabs:
+    print(f"{t.get('id',''):<35} {t.get('label','')}")
 
 # ============================================================
-# STEP 2: UPDATE EACH TAB
+# STEP 2: SORT TABS INTO TWO GROUPS
+# ============================================================
+
+def find_tab(tabs, identifier):
+    """Find tab by ID match or partial label match."""
+    match = next((t for t in tabs if t.get("id","").lower() == identifier.lower()), None)
+    if match:
+        return match
+    match = next((t for t in tabs if identifier.lower() in t.get("label","").lower()), None)
+    return match
+
+# Build ordered visible list
+visible_tabs = []
+for tab_id in VISIBLE_ORDER:
+    tab = find_tab(all_tabs, tab_id)
+    if tab and tab not in visible_tabs:
+        visible_tabs.append(tab)
+
+# Build hidden list
+hidden_tabs = []
+for tab_id in HIDDEN_NAMES:
+    tab = find_tab(all_tabs, tab_id)
+    if tab and tab not in hidden_tabs and tab not in visible_tabs:
+        hidden_tabs.append(tab)
+
+# Any remaining tabs not in either list → push to bottom hidden
+remaining = [t for t in all_tabs
+             if t not in visible_tabs and t not in hidden_tabs]
+hidden_tabs.extend(remaining)
+
+print(f"\n✅ Visible tabs : {len(visible_tabs)}")
+print(f"🚫 Hidden tabs  : {len(hidden_tabs)}")
+
+# ============================================================
+# STEP 3: ASSIGN POSITIONS
+# Visible tabs → positions 1, 2, 3 ...
+# Hidden tabs  → positions after visible, marked hidden
 # ============================================================
 print("\n" + "="*55)
 print("🔄 Updating navigation order...")
@@ -77,63 +113,47 @@ print("="*55 + "\n")
 success = 0
 failed  = 0
 
-# Update visible tabs with correct position
-for position, tab_id in enumerate(VISIBLE_TABS, start=1):
-    # Find matching tab
-    matched = next((t for t in tabs if t.get("id", "").lower() == tab_id.lower()), None)
-
-    if not matched:
-        print(f"⚠️  Tab not found: {tab_id} (skipping)")
-        continue
-
+# --- Visible tabs first ---
+for position, tab in enumerate(visible_tabs, start=1):
     response = requests.put(
-        f"{CANVAS_URL}/api/v1/courses/{COURSE_ID}/tabs/{matched['id']}",
+        f"{CANVAS_URL}/api/v1/courses/{COURSE_ID}/tabs/{tab['id']}",
         headers=headers,
         json={
             "position": position,
             "hidden": False
         }
     )
-
     if response.status_code in [200, 201]:
-        print(f"✅ Position {position:02d} | Visible  | {matched.get('label', tab_id)}")
+        print(f"✅ Pos {position:02d} | Visible | {tab.get('label','')}")
         success += 1
     else:
-        print(f"❌ Failed   | {matched.get('label', tab_id)} → {response.status_code}: {response.text}")
+        print(f"❌ Failed | {tab.get('label','')} → {response.status_code}: {response.text}")
         failed += 1
-
     time.sleep(0.3)
 
-# Hide unwanted tabs
 print()
-for tab_id in HIDDEN_TABS:
-    matched = next((t for t in tabs if t.get("id", "").lower() == tab_id.lower()), None)
 
-    if not matched:
-        # Try partial match for external tools
-        matched = next((t for t in tabs if tab_id.lower() in t.get("label", "").lower()), None)
-
-    if not matched:
-        print(f"⚠️  Tab not found: {tab_id} (skipping)")
-        continue
-
+# --- Hidden tabs pushed to bottom ---
+hidden_start = len(visible_tabs) + 1
+for position, tab in enumerate(hidden_tabs, start=hidden_start):
     response = requests.put(
-        f"{CANVAS_URL}/api/v1/courses/{COURSE_ID}/tabs/{matched['id']}",
+        f"{CANVAS_URL}/api/v1/courses/{COURSE_ID}/tabs/{tab['id']}",
         headers=headers,
-        json={"hidden": True}
+        json={
+            "position": position,
+            "hidden": True
+        }
     )
-
     if response.status_code in [200, 201]:
-        print(f"🚫 Hidden            | {matched.get('label', tab_id)}")
+        print(f"🚫 Pos {position:02d} | Hidden  | {tab.get('label','')}")
         success += 1
     else:
-        print(f"❌ Failed   | {matched.get('label', tab_id)} → {response.status_code}: {response.text}")
+        print(f"❌ Failed | {tab.get('label','')} → {response.status_code}: {response.text}")
         failed += 1
-
     time.sleep(0.3)
 
 # ============================================================
-# STEP 3: VERIFY FINAL ORDER
+# STEP 4: VERIFY FINAL STATE
 # ============================================================
 print("\n" + "="*55)
 print("🔍 Final Navigation Order:")
@@ -145,12 +165,12 @@ response = requests.get(
 )
 
 if response.status_code == 200:
-    updated_tabs = sorted(response.json(), key=lambda x: x.get("position", 999))
-    print(f"\n{'Pos':<6} {'Label':<30} {'Visible to Students'}")
-    print("-" * 55)
-    for t in updated_tabs:
-        hidden  = t.get("hidden", False)
-        status  = "🚫 Hidden" if hidden else "✅ Visible"
+    final_tabs = sorted(response.json(), key=lambda x: x.get("position", 999))
+    print(f"\n{'Pos':<6} {'Label':<30} {'Status'}")
+    print("-" * 50)
+    for t in final_tabs:
+        hidden = t.get("hidden", False)
+        status = "🚫 Hidden (bottom)" if hidden else "✅ Visible"
         print(f"{str(t.get('position','')):<6} {t.get('label',''):<30} {status}")
 
 # ============================================================
@@ -159,4 +179,4 @@ if response.status_code == 200:
 print("\n" + "="*55)
 print(f"🎉 DONE! Updated: {success} | Failed: {failed}")
 print("="*55)
-print("\n👉 Check your Canvas course to see the updated navigation!")
+print("\n👉 Visible tabs are on top, hidden tabs are dragged to the bottom!")
