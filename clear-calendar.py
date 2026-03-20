@@ -5,8 +5,8 @@ import time
 #  CONFIGURATION — Fill these in
 # ============================================================
 CANVAS_URL = "https://canvas.instructure.com"
-API_TOKEN = "7~MBH3uK97YzJE3VGrDkBYCe9PJ6KNt3Yu24vYaxTGNBHcWF2neL7cr7QYKZtn9vQL"  # ← Only change this
-COURSE_ID = "12525952"
+API_TOKEN = "Insert Your Token here"  # ← Only change this
+COURSE_ID = "Insert your course ID"
 # ============================================================
 
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
